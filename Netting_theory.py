@@ -48,30 +48,69 @@ E_lin *= 10**9
 rho_comp = (1-fibre_v)*rho_matrix + fibre_v*rho_fibre
 E_comp = fibre_v*E_fibres
 sigma_comp = translational_eff*fibre_v*sigma_fibres
+t_cylinder = 2*np.sum(layers_matrix)*t_ply
+t_endcaps = 2*np.sum(layers_matrix[0:2])*t_ply
+
+# OTHER PARAMETERS
+p_burst = safety_factor * p_prop
+p_proof = proof_factor * p_prop
 
 # FUEL/OXIDIZER PROPERTIES
-rho_prop, tank_vol = functions.properties_calc(prop_names, mixture_fractions, T_prop, m_prop, v_ullage)
+rho_prop, tank_vol = functions.properties_calc(components_names=prop_names, components_fractions=mixture_fractions,
+                                               fuel_temperature=T_prop, fuel_mass=m_prop, fuel_ullage=v_ullage)
 print("Propellant volume is {tank_vol} m^3 \nPropellant density is {rho_prop} kg/m^3".format(tank_vol=tank_vol,
                                                                                              rho_prop=rho_prop))
 
 # TANK GEOMETRY
-tank_r, tank_l, S_cylinder, S_endcaps, LD_ratio = functions.geometry_gen(tank_vol, LD_ratio, tank_r)
+tank_r, tank_l, S_cylinder, S_endcaps, LD_ratio = functions.geometry_gen(fuel_volume=tank_vol, ld_ratio=LD_ratio,
+                                                                         tank_radius=tank_r)
 print("Tank radius is {tank_r} m \nTank length is {tank_l} m".format(tank_r=tank_r, tank_l=tank_l))
 
 # NETTING THEORY
-stress_comp_endcaps = \
-    functions.netting_analysis(weave_matrix, layers_matrix, t_ply, E_comp, p_prop, tank_r, safety_factor,
-                               "end caps")
-stress_comp_cylinder = \
-    functions.netting_analysis(weave_matrix, layers_matrix, t_ply, E_comp, p_prop, tank_r, safety_factor,
-                               "cylinder")
+stress_comp_endcaps, e_matrix_endcaps = \
+    functions.netting_analysis(winding_angles=weave_matrix, winding_layers=layers_matrix, ply_thickness=t_ply,
+                               cylinder_thickness=t_cylinder, endcaps_thickness=t_endcaps, composite_e_modulus=E_comp,
+                               burst_pressure=p_burst, tank_radius=tank_r, tank_section="end caps")
+stress_comp_cylinder, e_matrix_cylinder = \
+    functions.netting_analysis(winding_angles=weave_matrix, winding_layers=layers_matrix, ply_thickness=t_ply,
+                               cylinder_thickness=t_cylinder, endcaps_thickness=t_endcaps, composite_e_modulus=E_comp,
+                               burst_pressure=p_burst, tank_radius=tank_r, tank_section="cylinder")
 print("Composite stress in end caps is {stress_endcaps} MPa \n"
       "Composite stress in cylinder is {stress_cylinder} MPa"
       .format(stress_endcaps=stress_comp_endcaps/10**6, stress_cylinder=stress_comp_cylinder/10**6))
 
-functions.graphical_analysis(stress_comp_cylinder, stress_comp_endcaps, sigma_comp, p_prop, safety_factor)
+# RESIDUAL ANALYSIS
+res_stress_comp_cyl, max_stress_comp_cyl, res_stress_lin_cyl, max_stress_lin_cyl = \
+    functions.residual_stress_analysis(apparent_composite_e_modulus_matrix=e_matrix_cylinder,
+                                       composite_e_modulus=E_comp, composite_thickness=t_cylinder,
+                                       liner_thickness=t_lin, liner_e_modulus=E_lin, liner_yield_strength=sigma_lin,
+                                       liner_poission_ratio=poisson_ratio, tank_radius=tank_r, pressure_proof=p_proof,
+                                       pressure_burst=p_burst, winding_angles=weave_matrix, tank_section="cylinder")
+
+res_stress_comp_end, max_stress_comp_end, res_stress_lin_end, max_stress_lin_end = \
+    functions.residual_stress_analysis(apparent_composite_e_modulus_matrix=e_matrix_endcaps,
+                                       composite_e_modulus=E_comp, composite_thickness=t_endcaps,
+                                       liner_thickness=t_lin, liner_e_modulus=E_lin, liner_yield_strength=sigma_lin,
+                                       liner_poission_ratio=poisson_ratio, tank_radius=tank_r, pressure_proof=p_proof,
+                                       pressure_burst=p_burst, winding_angles=weave_matrix, tank_section="endcaps")
+
+
+# GRAPHICAL ANALYSIS
+functions.graphical_analysis(composite_stress_cylinder=stress_comp_cylinder,
+                             composite_stress_endcaps=stress_comp_endcaps, composite_sigma_yield=sigma_comp,
+                             residual_stress_composite_cylinder=res_stress_comp_cyl,
+                             maximum_stress_composite_cylinder=max_stress_comp_cyl,
+                             residual_stress_liner_cylinder=res_stress_lin_cyl,
+                             maximum_stress_liner_cylinder=max_stress_lin_cyl,
+                             residual_stress_composite_endcaps=res_stress_comp_end,
+                             maximum_stress_composite_endcaps=max_stress_comp_end,
+                             residual_stress_liner_endcaps=res_stress_lin_end,
+                             maximum_stress_liner_endcaps=max_stress_lin_end, liner_sigma_yield=sigma_lin,
+                             tank_pressure=p_burst)
 
 
 # TANK MASS CALCULATION
-tank_mass = functions.mass_calc(layers_matrix, t_ply, t_lin, S_cylinder, S_endcaps, rho_comp, rho_lin)
+tank_mass = functions.mass_calc(thickness_cylinder=t_cylinder, thickness_endcaps=t_endcaps, thickness_liner=t_lin,
+                                surface_cylinder=S_cylinder, surface_endcaps=S_endcaps, composite_density=rho_comp,
+                                liner_density=rho_lin)
 print("Tank mass is {tank_mass} kg".format(tank_mass=tank_mass))
