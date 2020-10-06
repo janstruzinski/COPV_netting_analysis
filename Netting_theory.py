@@ -43,6 +43,7 @@ E_fibres *= 10**9
 t_ply /= 10**3
 t_lin /= 10**3
 E_lin *= 10**9
+sigma_lin *= 10**6
 
 # CALCULATE COMPOSITE PROPERTIES
 rho_comp = (1-fibre_v)*rho_matrix + fibre_v*rho_fibre
