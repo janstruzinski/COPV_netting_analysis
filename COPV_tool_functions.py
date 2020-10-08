@@ -86,30 +86,33 @@ def residual_stress_analysis(apparent_composite_e_modulus_matrix, composite_e_mo
 
     beta_matrix = comp_stiffness_matrix/total_stiffness_matrix
 
-    res_strain_matrix = (pressure_proof - yield_pressure)/comp_stiffness_matrix \
-                             - pressure_proof/total_stiffness_matrix
-    max_strain_matrix = (beta_matrix * pressure_burst)/comp_stiffness_matrix + res_strain_matrix
+    print(f"Beta matrix in {tank_section} is {beta_matrix}")
+
+    res_strain_matrix = (-pressure_proof*beta_matrix+pressure_proof-yield_pressure)/comp_stiffness_matrix
+    max_strain_matrix = ((pressure_burst-pressure_proof)*beta_matrix+pressure_proof-yield_pressure)\
+                        /comp_stiffness_matrix
     res_stress_comp_matrix = composite_e_modulus * np.add(res_strain_matrix[0] * np.sin(weave) ** 2,
                                                           res_strain_matrix[1] * np.cos(weave) ** 2)
     max_stress_comp_matrix = composite_e_modulus * np.add(max_strain_matrix[0] * np.sin(weave) ** 2,
                                                           max_strain_matrix[1] * np.cos(weave) ** 2)
 
-    residual_pressure_matrix = comp_stiffness_matrix * res_strain_matrix
+    residual_pressure_matrix = -pressure_proof*(1-beta_matrix)+yield_pressure
+    max_pressure_matrix = (pressure_burst-pressure_proof)*(1-beta_matrix)+yield_pressure
     if tank_section == "cylinder":
-        res_stress_lin_matrix = - residual_pressure_matrix * tank_radius/liner_thickness * np.array([1, 0.5])
-        max_stress_lin_matrix = (1-beta_matrix)*pressure_burst*tank_radius/liner_thickness * np.array([1, 0.5]) \
-                                    + res_stress_lin_matrix
-    else:
-        res_stress_lin_matrix = - residual_pressure_matrix * tank_radius / liner_thickness * np.array([0.5, 0.5])
-        max_stress_lin_matrix = (1 - beta_matrix) * pressure_burst * tank_radius / liner_thickness \
-                                * np.array([0.5, 0.5]) + res_stress_lin_matrix
+        res_stress_lin_matrix = residual_pressure_matrix * (tank_radius/liner_thickness) * np.array([1, 0.5])
+        max_stress_lin_matrix = max_pressure_matrix*(tank_radius/liner_thickness) * np.array([1, 0.5])
 
+    else:
+        res_stress_lin_matrix = residual_pressure_matrix * (tank_radius / liner_thickness) * np.array([0.5, 0.5])
+        max_stress_lin_matrix = max_pressure_matrix * (tank_radius / liner_thickness) * np.array([0.5, 0.5])
+    relative_pressure_matrix = max_pressure_matrix/pressure_burst
     print(f"Residual strain matrix in {tank_section} is {res_strain_matrix}")
     print(f"Maximum strain matrix in {tank_section} is {max_strain_matrix}")
     print(f"Residual stress composite matrix in {tank_section} is {res_stress_comp_matrix / 10 ** 6} MPa")
     print(f"Maximum stress composite matrix in {tank_section} is {max_stress_comp_matrix / 10 ** 6} MPa")
     print(f"Residual stress liner matrix in {tank_section} is {res_stress_lin_matrix/10**6} MPa")
     print(f"Maximum stress liner matrix in {tank_section} is {max_stress_lin_matrix/10**6} MPa")
+    print(f"Relative load carried by liner in {tank_section} is {relative_pressure_matrix}")
     return res_stress_comp_matrix, max_stress_comp_matrix, res_stress_lin_matrix, max_stress_lin_matrix
 
 
@@ -118,7 +121,7 @@ def graphical_analysis(composite_stress_cylinder, composite_stress_endcaps, comp
                        residual_stress_liner_cylinder, maximum_stress_liner_cylinder,
                        residual_stress_composite_endcaps, maximum_stress_composite_endcaps,
                        residual_stress_liner_endcaps, maximum_stress_liner_endcaps,
-                       liner_sigma_yield, tank_pressure):
+                       liner_sigma_yield, tank_pressure, liner_poisson_ratio):
     tank_pressure /= 10 ** 5
     composite_sigma_yield /= 10 ** 6
     composite_stress_cylinder /= 10 ** 6
@@ -132,6 +135,8 @@ def graphical_analysis(composite_stress_cylinder, composite_stress_endcaps, comp
     residual_stress_liner_endcaps /= 10 ** 6
     maximum_stress_liner_endcaps /= 10 ** 6
     liner_sigma_yield /= 10 ** 6
+    liner_sigma_yield_endcaps = liner_sigma_yield / (1-liner_poisson_ratio)
+    liner_sigma_yield_cylinder = liner_sigma_yield / (1-liner_poisson_ratio/2)
 
     netting_copv_analysis = plt.figure()
     netting_copv_analysis.suptitle("Netting analysis of COPV winding")
@@ -168,14 +173,14 @@ def graphical_analysis(composite_stress_cylinder, composite_stress_endcaps, comp
     ytab_comp_hoop = [residual_stress_composite_cylinder[2], maximum_stress_composite_cylinder[2]]
     ytab_liner_hoop = [residual_stress_liner_cylinder[0], maximum_stress_liner_cylinder[0]]
     ytab_liner_longitidunal = [residual_stress_liner_cylinder[1], maximum_stress_liner_cylinder[1]]
-    ytab_liner_yield = [liner_sigma_yield, liner_sigma_yield]
+    ytab_liner_yield_cylinder = [liner_sigma_yield_cylinder, liner_sigma_yield_cylinder]
     graph_residual_cylinder.plot(xtab, ytab_hellical_1, label="Stress in 1st hellical layer")
     graph_residual_cylinder.plot(xtab, ytab_hellical_2, label="Stress in 2nd hellical layer")
     graph_residual_cylinder.plot(xtab, ytab_comp_hoop, label="Stress in hoop layer")
     graph_residual_cylinder.plot(xtab, ytab_liner_hoop, label="Stress in liner, hoop direction")
     graph_residual_cylinder.plot(xtab, ytab_liner_longitidunal, label="Stress in liner, longitudinal direction")
     graph_residual_cylinder.plot(xtab, ytab_comp_yield, label="Ultimate stress of the composite")
-    graph_residual_cylinder.plot(xtab, ytab_liner_yield, label="Yield stress of liner")
+    graph_residual_cylinder.plot(xtab, ytab_liner_yield_cylinder, label="Yield stress of liner")
     graph_residual_cylinder.legend()
 
     graph_residual_endcap = residual_analysis.add_subplot(122, title="Stresses in the end caps",
@@ -184,12 +189,13 @@ def graphical_analysis(composite_stress_cylinder, composite_stress_endcaps, comp
     ytab_hellical_2 = [residual_stress_composite_endcaps[1], maximum_stress_composite_endcaps[1]]
     ytab_liner_hoop = [residual_stress_liner_endcaps[0], maximum_stress_liner_endcaps[0]]
     ytab_liner_longitidunal = [residual_stress_liner_endcaps[1], maximum_stress_liner_endcaps[1]]
+    ytab_liner_yield_endcaps = [liner_sigma_yield_endcaps, liner_sigma_yield_endcaps]
     graph_residual_endcap.plot(xtab, ytab_hellical_1, label="Stress in 1st hellical layer")
     graph_residual_endcap.plot(xtab, ytab_hellical_2, label="Stress in 2nd hellical layer")
     graph_residual_endcap.plot(xtab, ytab_liner_hoop, label="Stress in liner, hoop direction")
     graph_residual_endcap.plot(xtab, ytab_liner_longitidunal, label="Stress in liner, longitudinal direction")
     graph_residual_endcap.plot(xtab, ytab_comp_yield, label="Ultimate stress of the composite")
-    graph_residual_endcap.plot(xtab, ytab_liner_yield, label="Yield stress of liner")
+    graph_residual_endcap.plot(xtab, ytab_liner_yield_endcaps, label="Yield stress of liner")
     graph_residual_endcap.legend()
 
     plt.show()

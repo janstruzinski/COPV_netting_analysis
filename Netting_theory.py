@@ -107,7 +107,7 @@ functions.graphical_analysis(composite_stress_cylinder=stress_comp_cylinder,
                              maximum_stress_composite_endcaps=max_stress_comp_end,
                              residual_stress_liner_endcaps=res_stress_lin_end,
                              maximum_stress_liner_endcaps=max_stress_lin_end, liner_sigma_yield=sigma_lin,
-                             tank_pressure=p_burst)
+                             tank_pressure=p_burst, liner_poisson_ratio=poisson_ratio)
 
 
 # TANK MASS CALCULATION
